@@ -1,0 +1,15 @@
+You are an expert HR analyst.
+
+Job Description:
+{job_description}
+
+Candidate Profiles:
+{candidate_profiles}
+
+Ranking Results:
+{ranking_results}
+
+Please provide the following:
+1. HIRING SUMMARY REPORT: List top 3 candidates, match %, and reasoning.
+2. KEY FINDINGS: Mention strengths, gaps, and skills analysis.
+3. INTERVIEW RECOMMENDATIONS: Focus areas for each top candidate.
