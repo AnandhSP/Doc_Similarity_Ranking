@@ -1,0 +1,695 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenAI Resume Matcher</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            margin: 30px auto;
+            max-width: 1400px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 40px 20px;
+            border-radius: 20px 20px 0 0;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin: 0;
+        }
+        
+        .upload-section {
+            padding: 40px;
+        }
+        
+        .upload-box {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 30px;
+        }
+        
+        .upload-box:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+        
+        .upload-box.dragover {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+        
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            font-size: 1.1rem;
+            color: #555;
+            margin-bottom: 15px;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .btn-upload {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            color: white;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+            color: white;
+        }
+        
+        .btn-process {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border: none;
+            padding: 15px 40px;
+            border-radius: 25px;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin: 20px 10px;
+            transition: all 0.3s ease;
+            min-width: 200px;
+        }
+        
+        .btn-process:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+            color: white;
+        }
+        
+        .btn-process:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .btn-ai-report {
+            background: linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%);
+        }
+        
+        .btn-ai-report:hover:not(:disabled) {
+            box-shadow: 0 5px 15px rgba(253, 126, 20, 0.3);
+        }
+        
+        .btn-ai-mail {
+            background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);
+        }
+        
+        .btn-ai-mail:hover:not(:disabled) {
+            box-shadow: 0 5px 15px rgba(111, 66, 193, 0.3);
+        }
+        
+        .file-list {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        
+        .file-name {
+            flex: 1;
+            color: #495057;
+            font-size: 0.9rem;
+        }
+        
+        .file-remove {
+            color: #dc3545;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+        
+        .file-remove:hover {
+            color: #c82333;
+        }
+        
+        .output-section {
+            background: #f8f9fa;
+            border-radius: 0 0 20px 20px;
+            padding: 40px;
+            min-height: 400px;
+        }
+        
+        .output-content {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            min-height: 300px;
+        }
+        
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 50px;
+        }
+        
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            color: #667eea;
+        }
+        
+        .results-table {
+            margin-top: 20px;
+        }
+        
+        .results-table th {
+            background: #667eea;
+            color: white;
+            border: none;
+        }
+        
+        .results-table td {
+            vertical-align: middle;
+        }
+        
+        .score-badge {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .score-high { background: #28a745; }
+        .score-medium { background: #ffc107; color: #212529; }
+        .score-low { background: #dc3545; }
+        
+        .report-content {
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .coming-soon {
+            text-align: center;
+            padding: 50px;
+            color: #6c757d;
+        }
+        
+        .coming-soon i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .upload-section {
+                padding: 20px;
+            }
+            
+            .btn-process {
+                margin: 10px 5px;
+                min-width: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="main-container">
+            <!-- Header -->
+            <div class="header">
+                <h1><i class="fas fa-bolt"></i> GenAI Resume Matcher</h1>
+                <p>Upload a job description and multiple candidate profiles to automatically match and rank them using AI.</p>
+            </div>
+            
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <div class="row">
+                    <!-- Job Description Upload -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="upload-box" onclick="document.getElementById('jdFile').click()">
+                            <div class="upload-icon">
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <div class="upload-text">
+                                <strong>Job Description</strong><br>
+                                Drag your job description here<br>
+                                <small>or click to browse</small>
+                            </div>
+                            <button type="button" class="btn btn-upload">
+                                Choose File
+                            </button>
+                            <input type="file" id="jdFile" class="file-input" accept=".docx" onchange="handleJDUpload(this)">
+                        </div>
+                        <div id="jdFileList" class="file-list" style="display: none;"></div>
+                    </div>
+                    
+                    <!-- Candidate Profiles Upload -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="upload-box" onclick="document.getElementById('profileFiles').click()">
+                            <div class="upload-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="upload-text">
+                                <strong>Candidate Profiles</strong><br>
+                                <span id="profileCount">0/10 files</span><br>
+                                Drop candidate profiles here<br>
+                                <small>or click to browse multiple files</small>
+                            </div>
+                            <button type="button" class="btn btn-upload">
+                                Choose Files
+                            </button>
+                            <input type="file" id="profileFiles" class="file-input" accept=".docx" multiple onchange="handleProfileUpload(this)">
+                        </div>
+                        <div id="profileFileList" class="file-list" style="display: none;"></div>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="text-center">
+                    <button id="compareBtn" class="btn btn-process" onclick="compareAndRank()" disabled>
+                        <i class="fas fa-chart-line"></i> Compare and Rank
+                    </button>
+                    <button id="aiReportBtn" class="btn btn-process btn-ai-report" onclick="generateAIReport()" disabled>
+                        <i class="fas fa-robot"></i> AI-Cruiter Report
+                    </button>
+                    <button id="aiMailBtn" class="btn btn-process btn-ai-mail" onclick="generateAIMail()" disabled>
+                        <i class="fas fa-envelope"></i> AI-Mail Candidates
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Output Section -->
+            <div class="output-section">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3><i class="fas fa-chart-bar"></i> OUTPUT</h3>
+                    <button id="clearBtn" class="btn btn-outline-secondary" onclick="clearOutput()" style="display: none;">
+                        <i class="fas fa-trash"></i> Clear
+                    </button>
+                </div>
+                
+                <div class="output-content">
+                    <div id="defaultOutput" class="text-center text-muted py-5">
+                        <i class="fas fa-chart-line" style="font-size: 4rem; margin-bottom: 20px; opacity: 0.3;"></i>
+                        <h5>Ready to analyze your candidates</h5>
+                        <p>Upload a job description and candidate profiles, then click "Compare and Rank" to get started.</p>
+                    </div>
+                    
+                    <div id="loadingOutput" class="loading-spinner">
+                        <div class="spinner-border" role="status"></div>
+                        <h5 class="mt-3">Processing your request...</h5>
+                        <p class="text-muted">This may take a few moments</p>
+                    </div>
+                    
+                    <div id="resultsOutput" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let jdFile = null;
+        let profileFiles = [];
+        let comparisonResults = null;
+        
+        // File upload handlers
+        function handleJDUpload(input) {
+            if (input.files && input.files[0]) {
+                jdFile = input.files[0];
+                displayJDFile();
+                updateCompareButton();
+            }
+        }
+        
+        function handleProfileUpload(input) {
+            if (input.files) {
+                for (let file of input.files) {
+                    if (profileFiles.length < 10) {
+                        profileFiles.push(file);
+                    }
+                }
+                displayProfileFiles();
+                updateCompareButton();
+            }
+        }
+        
+        function displayJDFile() {
+            const fileList = document.getElementById('jdFileList');
+            if (jdFile) {
+                fileList.innerHTML = `
+                    <div class="file-item">
+                        <span class="file-name"><i class="fas fa-file-alt"></i> ${jdFile.name}</span>
+                        <span class="file-remove" onclick="removeJDFile()"><i class="fas fa-times"></i></span>
+                    </div>
+                `;
+                fileList.style.display = 'block';
+            } else {
+                fileList.style.display = 'none';
+            }
+        }
+        
+        function displayProfileFiles() {
+            const fileList = document.getElementById('profileFileList');
+            const profileCount = document.getElementById('profileCount');
+            
+            profileCount.textContent = `${profileFiles.length}/10 files`;
+            
+            if (profileFiles.length > 0) {
+                fileList.innerHTML = profileFiles.map((file, index) => `
+                    <div class="file-item">
+                        <span class="file-name"><i class="fas fa-user"></i> ${file.name}</span>
+                        <span class="file-remove" onclick="removeProfileFile(${index})"><i class="fas fa-times"></i></span>
+                    </div>
+                `).join('');
+                fileList.style.display = 'block';
+            } else {
+                fileList.style.display = 'none';
+            }
+        }
+        
+        function removeJDFile() {
+            jdFile = null;
+            document.getElementById('jdFile').value = '';
+            displayJDFile();
+            updateCompareButton();
+        }
+        
+        function removeProfileFile(index) {
+            profileFiles.splice(index, 1);
+            displayProfileFiles();
+            updateCompareButton();
+        }
+        
+        function updateCompareButton() {
+            const compareBtn = document.getElementById('compareBtn');
+            const canCompare = jdFile && profileFiles.length > 0;
+            compareBtn.disabled = !canCompare;
+        }
+        
+        // Drag and drop functionality
+        function setupDragAndDrop() {
+            const uploadBoxes = document.querySelectorAll('.upload-box');
+            
+            uploadBoxes.forEach(box => {
+                box.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    box.classList.add('dragover');
+                });
+                
+                box.addEventListener('dragleave', () => {
+                    box.classList.remove('dragover');
+                });
+                
+                box.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    box.classList.remove('dragover');
+                    
+                    const files = e.dataTransfer.files;
+                    if (box.querySelector('#jdFile')) {
+                        // Job description upload
+                        if (files.length > 0) {
+                            jdFile = files[0];
+                            displayJDFile();
+                            updateCompareButton();
+                        }
+                    } else {
+                        // Profile upload
+                        for (let file of files) {
+                            if (profileFiles.length < 10) {
+                                profileFiles.push(file);
+                            }
+                        }
+                        displayProfileFiles();
+                        updateCompareButton();
+                    }
+                });
+            });
+        }
+        
+        // API calls
+        async function compareAndRank() {
+            showLoading();
+            
+            const formData = new FormData();
+            formData.append('job_description', jdFile);
+            profileFiles.forEach(file => {
+                formData.append('profiles', file);
+            });
+            
+            try {
+                const response = await fetch('/api/compare-rank', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    comparisonResults = data.results;
+                    displayComparisonResults(data.results);
+                    document.getElementById('aiReportBtn').disabled = false;
+                } else {
+                    showError(data.error || 'An error occurred during comparison');
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+            }
+        }
+        
+        async function generateAIReport() {
+            if (!comparisonResults) {
+                showError('Please run comparison first');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                const response = await fetch('/api/ai-report', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        comparison_results: comparisonResults
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayAIReport(data.report);
+                } else {
+                    showError(data.error || 'An error occurred generating the report');
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+            }
+        }
+        
+        function generateAIMail() {
+            showComingSoon();
+        }
+        
+        // Display functions
+        function showLoading() {
+            document.getElementById('defaultOutput').style.display = 'none';
+            document.getElementById('resultsOutput').style.display = 'none';
+            document.getElementById('loadingOutput').style.display = 'block';
+            document.getElementById('clearBtn').style.display = 'none';
+        }
+        
+        function displayComparisonResults(results) {
+            const output = document.getElementById('resultsOutput');
+            
+            let html = `
+                <h4><i class="fas fa-trophy"></i> Ranking Results</h4>
+                <div class="table-responsive results-table">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Candidate</th>
+                                <th>Match Score</th>
+                                <th>Rating</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            results.forEach((candidate, index) => {
+                const percentage = (candidate.similarity_score * 100).toFixed(1);
+                const rank = index + 1;
+                const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+                
+                let scoreClass = 'score-low';
+                if (percentage >= 70) scoreClass = 'score-high';
+                else if (percentage >= 50) scoreClass = 'score-medium';
+                
+                const stars = '⭐'.repeat(Math.min(5, Math.floor(percentage / 20) + 1));
+                
+                html += `
+                    <tr>
+                        <td><strong>${medal}</strong></td>
+                        <td>${candidate.filename.replace('.docx', '').replace(/_/g, ' ')}</td>
+                        <td><span class="score-badge ${scoreClass}">${percentage}%</span></td>
+                        <td>${stars}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3">
+                    <p class="text-muted">
+                        <i class="fas fa-info-circle"></i> 
+                        Analysis complete! ${results.length} candidates ranked by similarity score.
+                        Click "AI-Cruiter Report" for detailed insights.
+                    </p>
+                </div>
+            `;
+            
+            output.innerHTML = html;
+            showResults();
+        }
+        
+        function displayAIReport(report) {
+            const output = document.getElementById('resultsOutput');
+            
+            const html = `
+                <h4><i class="fas fa-robot"></i> AI-Cruiter Report</h4>
+                <div class="report-content">${report}</div>
+                <div class="mt-3">
+                    <button class="btn btn-success" onclick="downloadReport()">
+                        <i class="fas fa-download"></i> Download Report
+                    </button>
+                </div>
+            `;
+            
+            output.innerHTML = html;
+            showResults();
+        }
+        
+        function showComingSoon() {
+            const output = document.getElementById('resultsOutput');
+            
+            const html = `
+                <div class="coming-soon">
+                    <i class="fas fa-rocket"></i>
+                    <h4>Coming Soon!</h4>
+                    <p>AI-Mail Candidates feature is under development.<br>
+                    Stay tuned for automated candidate communication!</p>
+                </div>
+            `;
+            
+            output.innerHTML = html;
+            showResults();
+        }
+        
+        function showResults() {
+            document.getElementById('defaultOutput').style.display = 'none';
+            document.getElementById('loadingOutput').style.display = 'none';
+            document.getElementById('resultsOutput').style.display = 'block';
+            document.getElementById('clearBtn').style.display = 'block';
+        }
+        
+        function showError(message) {
+            const output = document.getElementById('resultsOutput');
+            
+            const html = `
+                <div class="text-center text-danger py-5">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 4rem; margin-bottom: 20px;"></i>
+                    <h5>Error Occurred</h5>
+                    <p>${message}</p>
+                </div>
+            `;
+            
+            output.innerHTML = html;
+            showResults();
+        }
+        
+        function clearOutput() {
+            document.getElementById('resultsOutput').style.display = 'none';
+            document.getElementById('defaultOutput').style.display = 'block';
+            document.getElementById('clearBtn').style.display = 'none';
+        }
+        
+        function downloadReport() {
+            const reportContent = document.querySelector('.report-content').textContent;
+            const blob = new Blob([reportContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ai_cruiter_report.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setupDragAndDrop();
+        });
+    </script>
+</body>
+</html>
