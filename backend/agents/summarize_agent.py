@@ -1,7 +1,8 @@
 ﻿# backend/agents/summarize_agent.py
 import os
 import docx
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
+from transformers.pipelines import pipeline
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 from datetime import datetime
 import re

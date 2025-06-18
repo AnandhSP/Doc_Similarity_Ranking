@@ -29,6 +29,7 @@ logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 from agents.comparison_agent import ComparisonAgent
 from agents.ranking_agent import RankingAgent
 from agents.summarize_agent import SummarizeAgent
+from agents.communication_agent import CommunicationAgent
 
 # FastAPI app initialization
 app = FastAPI(title="GenAI Resume Matcher", version="1.0.0")
@@ -42,19 +43,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Configuration
 UPLOAD_DIR = "data/uploads"
 TEMP_DIR = "data/temp"
 REPORTS_DIR = "data/reports"
+STATIC_DIR = "static"
 
 # Ensure directories exist
-for directory in [UPLOAD_DIR, TEMP_DIR, REPORTS_DIR]:
+for directory in [UPLOAD_DIR, TEMP_DIR, REPORTS_DIR, STATIC_DIR]:
     os.makedirs(directory, exist_ok=True)
 
 # Global variables to store agents (initialize once)
 comp_agent = None
 rank_agent = None
 summary_agent = None
+comm_agent = None  # Add communication agent
 
 # Session storage for comparison results (in production, use Redis or database)
 comparison_sessions = {}
@@ -72,7 +78,7 @@ class APIResponse(BaseModel):
 
 def initialize_agents():
     """Initialize all agents on startup"""
-    global comp_agent, rank_agent, summary_agent
+    global comp_agent, rank_agent, summary_agent, comm_agent
     
     try:
         print("🚀 Initializing AI Agents...")
@@ -89,6 +95,10 @@ def initialize_agents():
         print("🤖 Loading AI Summarization Agent (this may take a moment)...")
         summary_agent = SummarizeAgent()
         print("✅ Summarize Agent loaded with AI capabilities")
+
+        # Initialize Communication Agent
+        comm_agent = CommunicationAgent()
+        print("✅ Communication Agent loaded")
         
         print("🎉 All agents initialized successfully!")
         return True
@@ -123,12 +133,12 @@ async def startup_event():
 async def read_root():
     """Serve the main HTML page"""
     try:
-        with open("index.html", "r", encoding="utf-8") as f:
+        with open("static/index.html", "r", encoding="utf-8", errors="ignore") as f:
             html_content = f.read()
         return HTMLResponse(content=html_content)
     except FileNotFoundError:
         return HTMLResponse(
-            content="<h1>Error: index.html not found</h1><p>Please ensure index.html is in the same directory as main.py</p>",
+            content="<h1>Error: index.html not found</h1><p>Please ensure index.html is in the static directory</p>",
             status_code=404
         )
 
@@ -143,11 +153,11 @@ async def compare_and_rank(
         raise HTTPException(status_code=500, detail="Agents not properly initialized")
     
     # Validate file types
-    if not job_description.filename.endswith('.docx'):
+    if not job_description or not job_description.filename or not job_description.filename.endswith('.docx'):
         raise HTTPException(status_code=400, detail="Job description must be a .docx file")
     
     for profile in profiles:
-        if not profile.filename.endswith('.docx'):
+        if not profile or not profile.filename or not profile.filename.endswith('.docx'):
             raise HTTPException(status_code=400, detail="All profile files must be .docx files")
     
     # Create session directory for this request
@@ -216,20 +226,28 @@ async def generate_ai_report(request: Request):
     try:
         # Parse request body
         body = await request.json()
+        session_id = body.get('session_id')
         comparison_results = body.get('comparison_results', [])
         
-        if not comparison_results:
-            raise HTTPException(status_code=400, detail="No comparison results provided")
-        
-        # Get session_id from the first result
-        session_id = comparison_results[0].get('session_id')
-        if not session_id or session_id not in comparison_sessions:
-            raise HTTPException(status_code=400, detail="Invalid or expired session")
-        
-        session_data = comparison_sessions[session_id]
-        ranked_results = session_data['ranked_results']
-        jd_path = session_data['jd_path']
-        profile_paths = session_data['profile_paths']
+        # If session_id is provided directly, use it
+        if session_id:
+            if session_id not in comparison_sessions:
+                raise HTTPException(status_code=400, detail="Invalid or expired session")
+            session_data = comparison_sessions[session_id]
+            ranked_results = session_data['ranked_results']
+            jd_path = session_data['jd_path']
+            profile_paths = session_data['profile_paths']
+        # Otherwise try to get session_id from comparison_results
+        elif comparison_results:
+            session_id = comparison_results[0].get('session_id')
+            if not session_id or session_id not in comparison_sessions:
+                raise HTTPException(status_code=400, detail="Invalid or expired session")
+            session_data = comparison_sessions[session_id]
+            ranked_results = session_data['ranked_results']
+            jd_path = session_data['jd_path']
+            profile_paths = session_data['profile_paths']
+        else:
+            raise HTTPException(status_code=400, detail="No session_id or comparison results provided")
         
         print("🤖 Generating AI-powered comparative summary...")
         
@@ -241,11 +259,6 @@ async def generate_ai_report(request: Request):
         )
         
         print("✅ AI report generated successfully")
-        
-        # Clean up session files after generating report
-        cleanup_temp_files(session_id)
-        if session_id in comparison_sessions:
-            del comparison_sessions[session_id]
         
         return JSONResponse(content={
             "success": True,
@@ -266,13 +279,71 @@ async def generate_ai_mail():
         "status": "coming_soon"
     })
 
+@app.post("/api/generate-emails")
+async def generate_shortlist_emails(request: Request):
+    """Generate personalized emails for shortlisted candidates"""
+    
+    if not comm_agent:
+        raise HTTPException(status_code=500, detail="Communication agent not properly initialized")
+    
+    try:
+        # Parse request body
+        body = await request.json()
+        session_id = body.get('session_id')
+        ranked_results = body.get('ranked_results', [])
+        position_title = body.get('position_title', 'the position')
+        
+        # If session_id is provided directly, use it
+        if session_id:
+            if session_id not in comparison_sessions:
+                raise HTTPException(status_code=400, detail="Invalid or expired session")
+            session_data = comparison_sessions[session_id]
+            ranked_results = session_data['ranked_results']
+            profile_paths = session_data['profile_paths']
+        # Otherwise try to get session_id from ranked_results
+        elif ranked_results:
+            session_id = ranked_results[0].get('session_id')
+            if not session_id or session_id not in comparison_sessions:
+                raise HTTPException(status_code=400, detail="Invalid or expired session")
+            session_data = comparison_sessions[session_id]
+            profile_paths = session_data['profile_paths']
+        else:
+            raise HTTPException(status_code=400, detail="No session_id or ranked results provided")
+        
+        print("📧 Generating personalized emails for shortlisted candidates...")
+        
+        # Generate emails using communication agent
+        notifications = comm_agent.process_shortlisted_candidates(
+            ranked_results,
+            profile_paths,
+            position_title
+        )
+        
+        print(f"✅ Generated {len(notifications)} personalized emails")
+        
+        # Clean up session files after all processing is complete
+        cleanup_temp_files(session_id)
+        if session_id in comparison_sessions:
+            del comparison_sessions[session_id]
+        
+        return JSONResponse(content={
+            "success": True,
+            "notifications": notifications,
+            "message": f"Successfully generated {len(notifications)} personalized emails"
+        })
+        
+    except Exception as e:
+        print(f"❌ Error generating emails: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating emails: {str(e)}")
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     agent_status = {
         "comparison_agent": comp_agent is not None,
         "ranking_agent": rank_agent is not None,
-        "summarize_agent": summary_agent is not None
+        "summarize_agent": summary_agent is not None,
+        "communication_agent": comm_agent is not None
     }
     
     return JSONResponse(content={
@@ -312,7 +383,7 @@ if __name__ == "__main__":
     # Run the FastAPI app
     uvicorn.run(
         app, 
-        host="0.0.0.0", 
+        host="127.0.0.1", 
         port=8000, 
         log_level="info",
         reload=False  # Set to True for development

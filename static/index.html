@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenAI Resume Matcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        .drag-area {
+            border: 2px dashed #4B82F6;
+            background: rgba(75, 130, 246, 0.05);
+        }
+        .drag-area.dragover {
+            background: rgba(75, 130, 246, 0.1);
+            border-color: #2563EB;
+        }
+        .disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-blue-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold flex items-center justify-center gap-2">
+                <span class="text-orange-500">⚡</span>
+                GenAI Resume Matcher
+            </h1>
+            <p class="text-gray-600 mt-2">
+                Upload a job description and multiple candidate profiles to automatically match and rank them using AI.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Left Side: Upload Section -->
+            <div class="space-y-6">
+                <!-- Job Description Upload -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <span class="mr-2">📄</span>
+                        Job Description
+                    </h2>
+                    <div id="jdUpload" class="drag-area rounded-lg p-8 text-center cursor-pointer">
+                        <div class="text-blue-500 mb-2">
+                            <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                        </div>
+                        <p class="text-gray-600">Drop your job description here</p>
+                        <p class="text-sm text-gray-500">or click to browse</p>
+                        <input type="file" id="jdInput" class="hidden" accept=".docx">
+                        <p class="text-xs text-gray-400 mt-2">DOCX files only</p>
+                    </div>
+                    <div id="jdFileName" class="mt-2 text-sm text-gray-600 hidden"></div>
+                </div>
+
+                <!-- Candidate Profiles Upload -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <span class="mr-2">👥</span>
+                        Candidate Profiles
+                    </h2>
+                    <div id="profilesUpload" class="drag-area rounded-lg p-8 text-center cursor-pointer">
+                        <div class="text-blue-500 mb-2">
+                            <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                        </div>
+                        <p class="text-gray-600">Drop candidate profiles here</p>
+                        <p class="text-sm text-gray-500">or click to browse</p>
+                        <input type="file" id="profilesInput" class="hidden" accept=".docx" multiple>
+                        <p class="text-xs text-gray-400 mt-2">DOCX files only • Max 10 files</p>
+                    </div>
+                    <div id="profilesCount" class="mt-2 text-sm text-gray-600">0/10 files</div>
+                    <div id="profilesList" class="mt-2 space-y-1"></div>
+                </div>
+            </div>
+
+            <!-- Right Side: Actions and Results -->
+            <div class="space-y-6">
+                <!-- Action Buttons -->
+                <div class="space-y-4">
+                    <button id="compareBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                        <span>⚡</span>
+                        Compare and Rank
+                    </button>
+
+                    <button id="reportBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors disabled" disabled>
+                        AI-Cruiter Report
+                    </button>
+
+                    <button id="emailBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors disabled" disabled>
+                        AI-Mail Candidates
+                    </button>
+                </div>
+
+                <!-- Results Section -->
+                <div id="resultsSection" class="bg-white rounded-lg shadow-md p-6 min-h-[400px] hidden">
+                    <h2 class="text-lg font-semibold mb-4">Results</h2>
+                    <div id="loadingIndicator" class="text-center py-8 hidden">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                        <p class="mt-4 text-gray-600">Processing...</p>
+                    </div>
+                    <div id="resultsContent" class="space-y-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let rankedResults = null;
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.target.closest('.drag-area').classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.target.closest('.drag-area').classList.remove('dragover');
+        }
+
+        function handleDrop(e, isJD = true) {
+            e.preventDefault();
+            e.target.closest('.drag-area').classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (isJD) {
+                handleJDFile(files[0]);
+            } else {
+                handleProfileFiles(files);
+            }
+        }
+
+        function handleJDFile(file) {
+            if (!file) return;
+            if (!file.name.endsWith('.docx')) {
+                alert('Please upload a DOCX file');
+                return;
+            }
+            document.getElementById('jdFileName').textContent = file.name;
+            document.getElementById('jdFileName').classList.remove('hidden');
+        }
+
+        function handleProfileFiles(files) {
+            const profilesList = document.getElementById('profilesList');
+            profilesList.innerHTML = '';
+            Array.from(files).slice(0, 10).forEach(file => {
+                if (!file.name.endsWith('.docx')) {
+                    alert('Please upload only DOCX files');
+                    return;
+                }
+                const fileItem = document.createElement('div');
+                fileItem.className = 'text-sm text-gray-600';
+                fileItem.textContent = file.name;
+                profilesList.appendChild(fileItem);
+            });
+            document.getElementById('profilesCount').textContent = `${files.length}/10 files`;
+        }
+
+        async function handleCompareAndRank() {
+            const jdFile = document.getElementById('jdInput').files[0];
+            const profileFiles = document.getElementById('profilesInput').files;
+
+            if (!jdFile || profileFiles.length === 0) {
+                alert('Please upload both job description and candidate profiles');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('job_description', jdFile);
+            Array.from(profileFiles).forEach(file => {
+                formData.append('profiles', file);
+            });
+
+            try {
+                document.getElementById('loadingIndicator').classList.remove('hidden');
+                document.getElementById('resultsSection').classList.remove('hidden');
+                document.getElementById('resultsContent').innerHTML = '';
+
+                const response = await axios.post('/api/compare-rank', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+
+                if (response.data.success) {
+                    currentSessionId = response.data.session_id;
+                    rankedResults = response.data.results;
+                    displayRankingResults(response.data.results);
+                    document.getElementById('reportBtn').disabled = false;
+                    document.getElementById('reportBtn').classList.remove('disabled');
+                }
+            } catch (error) {
+                alert('Error during comparison: ' + error.message);
+            } finally {
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }
+        }
+
+        async function handleAIReport() {
+            if (!currentSessionId || !rankedResults) {
+                alert('Please run comparison first');
+                return;
+            }
+
+            try {
+                document.getElementById('loadingIndicator').classList.remove('hidden');
+                
+                const response = await axios.post('/api/ai-report', {
+                    session_id: currentSessionId
+                });
+
+                if (response.data.success) {
+                    displayAIReport(response.data.report);
+                    document.getElementById('emailBtn').disabled = false;
+                    document.getElementById('emailBtn').classList.remove('disabled');
+                }
+            } catch (error) {
+                alert('Error generating AI report: ' + error.message);
+            } finally {
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }
+        }
+
+        async function handleEmailGeneration() {
+            if (!currentSessionId || !rankedResults) {
+                alert('Please run comparison first');
+                return;
+            }
+
+            try {
+                document.getElementById('loadingIndicator').classList.remove('hidden');
+                
+                const response = await axios.post('/api/generate-emails', {
+                    session_id: currentSessionId,
+                    position_title: 'the position'
+                });
+
+                if (response.data.success) {
+                    displayEmailResults(response.data.notifications);
+                }
+            } catch (error) {
+                alert('Error generating emails: ' + error.message);
+            } finally {
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }
+        }
+
+        function displayRankingResults(results) {
+            const resultsContent = document.getElementById('resultsContent');
+            resultsContent.innerHTML = `
+                <h3 class="font-semibold text-lg mb-4">Ranking Results</h3>
+                <div class="space-y-4">
+                    ${results.map((result, index) => `
+                        <div class="border rounded-lg p-4 ${index === 0 ? 'bg-blue-50 border-blue-200' : ''}">
+                            <div class="flex justify-between items-center">
+                                <span class="font-medium">${result.filename}</span>
+                                <span class="text-blue-600 font-semibold">${(result.similarity_score * 100).toFixed(1)}% Match</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function displayAIReport(report) {
+            const resultsContent = document.getElementById('resultsContent');
+            resultsContent.innerHTML = `
+                <h3 class="font-semibold text-lg mb-4">AI-Cruiter Report</h3>
+                <div class="prose max-w-none">
+                    ${report.split('\n').map(para => `<p class="mb-4">${para}</p>`).join('')}
+                </div>
+            `;
+        }
+
+        function displayEmailResults(notifications) {
+            const resultsContent = document.getElementById('resultsContent');
+            resultsContent.innerHTML = `
+                <h3 class="font-semibold text-lg mb-4">Generated Emails</h3>
+                <div class="space-y-6">
+                    ${notifications.map(notification => `
+                        <div class="border rounded-lg p-4">
+                            <h4 class="font-medium mb-2">Email for ${notification.candidate_name}</h4>
+                            <div class="bg-gray-50 p-4 rounded whitespace-pre-wrap font-mono text-sm">
+                                ${notification.email_content}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const jdUpload = document.getElementById('jdUpload');
+            const jdInput = document.getElementById('jdInput');
+
+            jdUpload.addEventListener('dragover', handleDragOver);
+            jdUpload.addEventListener('dragleave', handleDragLeave);
+            jdUpload.addEventListener('drop', e => handleDrop(e, true));
+            jdUpload.addEventListener('click', () => jdInput.click());
+            jdInput.addEventListener('change', e => handleJDFile(e.target.files[0]));
+
+            const profilesUpload = document.getElementById('profilesUpload');
+            const profilesInput = document.getElementById('profilesInput');
+
+            profilesUpload.addEventListener('dragover', handleDragOver);
+            profilesUpload.addEventListener('dragleave', handleDragLeave);
+            profilesUpload.addEventListener('drop', e => handleDrop(e, false));
+            profilesUpload.addEventListener('click', () => profilesInput.click());
+            profilesInput.addEventListener('change', e => handleProfileFiles(e.target.files));
+
+            document.getElementById('compareBtn').addEventListener('click', handleCompareAndRank);
+            document.getElementById('reportBtn').addEventListener('click', handleAIReport);
+            document.getElementById('emailBtn').addEventListener('click', handleEmailGeneration);
+        });
+    </script>
+</body>
+</html> 
